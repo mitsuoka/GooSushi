@@ -20,7 +20,7 @@ import "dart:uri" as uri;
 final HOST = "127.0.0.1";
 final int PORT = 8080;
 final REQUEST_PATH = "/GooSushi";
-final LOG_REQUESTS = true;
+final LOG_REQUESTS = false;
 final int MaxInactiveInterval = 60; // set this parameter in seconds.
 ShoppingCart cartBase;
 Map menu;  // today's menu
