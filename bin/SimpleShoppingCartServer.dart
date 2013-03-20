@@ -68,7 +68,7 @@ void requestReceivedHandler(HttpRequest request) {
     htmlResponse = createErrorPage(err.toString()).toString();
   }
   response.headers.add("Content-Type", "text/html; charset=UTF-8");
-  response.addString(htmlResponse);
+  response.write(htmlResponse);
   response.close();
 }
 
@@ -161,7 +161,7 @@ class Session{
  * Shopping cart class.
  */
 class ShoppingCart {
-  Map<int, ShoppingCartItem> _items = new Map();
+  Map<int, ShoppingCartItem> _items;
   double _grandTotal;
   DateTime _orderedAt;
 

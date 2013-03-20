@@ -58,7 +58,7 @@ void requestReceivedHandler(HttpRequest request) {
   response.headers.add("Content-Type", "text/html; charset=UTF-8");
   // cookie setting example (accepts multi-byte characters)
   setCookieParameter(response, "testName", "TestValue_√2=1.41", request.uri.path);
-  response.addString(responseBody);
+  response.write(responseBody);
   response.close(); // flush
 }
 
