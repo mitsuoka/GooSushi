@@ -22,20 +22,17 @@ final int PORT = 8080;
 final REQUEST_PATH = "/GooSushi";
 final LOG_REQUESTS = false;
 final int MaxInactiveInterval = 60; // set this parameter in seconds.
-ShoppingCart cartBase;
-Map menu;  // today's menu
+final ShoppingCart cartBase = new ShoppingCart();
+final Map menu = cartBase.items;  // today's menu
 
 
 void main() {
   try{
-    cartBase = new ShoppingCart();
-    menu = cartBase.items;
     print('today\'s menu');
     cartBase.sortedItemCodes().forEach((itemCode){
       print('itemCode : ${menu[itemCode].itemCode}, itemName : '
       '${menu[itemCode].itemName}, perItemCost : ${menu[itemCode].perItemCost}');
     });
-
 
     HttpServer.bind(HOST, PORT).then((HttpServer server) {
       server.sessionTimeout = MaxInactiveInterval; // set session timeout
@@ -56,13 +53,13 @@ void main() {
 
 
 void requestReceivedHandler(HttpRequest request) {
-  HttpResponse response = request.response;
+  final HttpResponse response = request.response;
   String htmlResponse;
   try {
     if (LOG_REQUESTS) print(createLogMessage(request).toString());
     Session session = new Session(request);
-    if (LOG_REQUESTS) print(createSessionLog(request, session).toString());
-    htmlResponse = createHtmlResponse(request, session).toString();
+    if (LOG_REQUESTS) print(createSessionLog(request).toString());
+    htmlResponse = createHtmlResponse(request).toString();
 //  if (LOG_REQUESTS) print(createSessionLog(request, session).toString());
   } on Exception catch (err) {
     htmlResponse = createErrorPage(err.toString()).toString();
@@ -74,12 +71,13 @@ void requestReceivedHandler(HttpRequest request) {
 
 
 // Create HTML response to the request.
-StringBuffer createHtmlResponse(HttpRequest request, Session session) {
+StringBuffer createHtmlResponse(HttpRequest request) {
+  final session = new Session(request);
   if (session.isNew || request.uri.query == null) {
     return createMenuPage();
   }
   else if (request.queryParameters.containsKey("menuPage")) {
-    return createConfirmPage(request,session);
+    return createConfirmPage(request);
   }
   else if (request.queryParameters["confirmPage"].trim() == "confirmed") {
     StringBuffer sb = createThankYouPage(session);
@@ -98,61 +96,65 @@ StringBuffer createHtmlResponse(HttpRequest request, Session session) {
 
 /*
  * Session class is a wrapper of the HttpSession
- * Makes it easier to transport Java Servlet code to Dart server
+ * Makes it easier to transport Java server code to Dart server
  */
 class Session{
-  HttpSession session;
-  String id;
-  bool isNew;
-
-  // constructor
+  HttpSession _session;
+  String _id;
+  bool _isNew;
   Session(HttpRequest request){
-    session = request.session;
-    id = request.session.id;
-    isNew = request.session.isNew;
+    _session = request.session;
+    _id = request.session.id;
+    _isNew = request.session.isNew;
     request.session.onTimeout = (){
-    print('${new DateTime.now().toString().slice(0, 19)} : '
-      'timeout occured for session ${request.session.id}');
+    print("${new DateTime.now().toString().slice(0, 19)} : "
+        "timeout occured for session ${request.session.id}");
     };
   }
 
+  // getters
+  HttpSession get session => _session;
+  String get id => _id;
+  bool get isNew => _isNew;
+
   // getAttribute(String name)
   dynamic getAttribute(String name) {
-    if (session.containsKey(name)) {
-      return session[name];
+    if (_session.containsKey(name)) {
+      return _session[name];
     }
-    else { return null;
+    else {
+      return null;
     }
   }
 
   // setAttribute(String name, dynamic value)
   void setAttribute(String name, dynamic value) {
-    session.remove(name);
-    session[name] = value;
+    _session.remove(name);
+    _session[name] = value;
   }
 
   // getAttributes()
   Map getAttributes() {
     Map attributes = {};
-    for(String x in session.keys) attributes[x] = session[x];
+    for(String x in _session.keys) attributes[x] = _session[x];
     return attributes;
   }
 
   // getAttributeNames()
   List getAttributeNames() {
     List names = [];
-    for(String x in session.keys) names.add(x);
+    for(String x in _session.keys) names.add(x);
     return names;
   }
 
   // removeAttribute()
   void removeAttribute(String name) {
-    session.remove(name);
+    _session.remove(name);
   }
 
   // invalidate()
   void invalidate() {
-    session.destroy();
+    _session.destroy();
   }
 }
 
@@ -265,7 +267,6 @@ class TodaysMenu {
     190, "Ika (Squid)", 200
   ];
 
-
   // constructor
   TodaysMenu() {
     for (var i = 0; i < todaysMenu.length ~/ 3; i++) {
@@ -336,7 +337,8 @@ StringBuffer createMenuPage({ShoppingCart cart: null}) {
 
 
 // Create confirm page HTML text.
-StringBuffer createConfirmPage(HttpRequest request, Session session) {
+StringBuffer createConfirmPage(HttpRequest request) {
+  final session = new Session(request);
   // create a shopping cart
   var cart = new ShoppingCart();
   request.queryParameters.forEach((String name, String value) {
@@ -367,7 +369,9 @@ StringBuffer createConfirmPage(HttpRequest request, Session session) {
     <h2>Order Confirmation</h2><br>
      <form method="get" action="./GooSushi">
       <table border="1">
-        <tr bgcolor="#90ee90"><th align="center">Item</th><th align="center">Quantity</th><th align="center">Subtotal</th></tr>''';
+        <tr bgcolor="#90ee90"><th align="center">Item</th>
+          <th align="center">Quantity</th><th align="center">Subtotal</th>
+        </tr>''';
   sb.write(text1);
   var sumQty = 0;
   cart.sortedItemCodes().forEach((itemCode) {
@@ -486,7 +490,8 @@ requset.session.isNew : ${request.session.isNew}''');
 
 
 // Create session log message
-StringBuffer createSessionLog(HttpRequest request, Session session) {
+StringBuffer createSessionLog(HttpRequest request) {
+  final session = new Session(request);
   var sb = new StringBuffer("");
   sb.write('''  session.isNew : ${session.isNew}
   session.id : ${session.id}

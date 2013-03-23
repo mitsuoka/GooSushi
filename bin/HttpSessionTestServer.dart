@@ -47,11 +47,10 @@ void requestReceivedHandler(HttpRequest request) {
     session = new Session(request); // get session for the request
     if (request.queryParameters["command"] == "New Session") {
       session.invalidate(); // note: HttpSession.destroy() is effective from the next request
-      session = new Session(request);  // therefore this call has no effect
     }
-    sesLog = createSessionLog(request, session);
+    sesLog = createSessionLog(request);
     if (LOG_REQUESTS) print(sesLog.toString());
-    responseBody = createHtmlResponse(request, session);
+    responseBody = createHtmlResponse(request);
   } on Exception catch (err) {
     responseBody = createErrorPage(err.toString());
   }
@@ -62,7 +61,8 @@ void requestReceivedHandler(HttpRequest request) {
   response.close(); // flush
 }
 
-String createHtmlResponse(HttpRequest request, Session session) {
+String createHtmlResponse(HttpRequest request) {
+  final session = new Session(request);
   if (request.queryParameters["command"] == "New Session" || request.queryParameters["command"] == null) {
     return '''
     <!DOCTYPE html>
@@ -80,7 +80,7 @@ Available data from the request :
 Session data obtained from the request :
         <pre>${makeSafe(sesLog).toString()}</pre>
 Session data for the response :
-        <pre>${makeSafe(createSessionLog(request, session)).toString()}</pre>
+        <pre>${makeSafe(createSessionLog(request)).toString()}</pre>
       </body>
     </html>''';
   }
@@ -109,7 +109,7 @@ Available data from the request :
 Session data obtained from the request :
         <pre>${makeSafe(sesLog).toString()}</pre>
 Session data for the response :
-        <pre>${makeSafe(createSessionLog(request, session)).toString()}</pre>
+        <pre>${makeSafe(createSessionLog(request)).toString()}</pre>
     </body>
   </html>''';
 }
@@ -134,22 +134,28 @@ String createErrorPage(String errorMessage) {
  * Makes it easier to transport Java server code to Dart server
  */
 class Session{
-  HttpSession session;
-  String id;
-  bool isNew;
+  HttpSession _session;
+  String _id;
+  bool _isNew;
   Session(HttpRequest request){
-    session = request.session;
-    id = request.session.id;
-    isNew = request.session.isNew;
+    _session = request.session;
+    _id = request.session.id;
+    _isNew = request.session.isNew;
     request.session.onTimeout = (){
-    print("${new DateTime.now().toString().slice(0, 19)} : timeout occured for session ${request.session.id}");
+    print("${new DateTime.now().toString().slice(0, 19)} : "
+        "timeout occured for session ${request.session.id}");
     };
   }
 
+  // getters
+  HttpSession get session => _session;
+  String get id => _id;
+  bool get isNew => _isNew;
+
   // getAttribute(String name)
   dynamic getAttribute(String name) {
-    if (session.containsKey(name)) {
-      return session[name];
+    if (_session.containsKey(name)) {
+      return _session[name];
     }
     else {
       return null;
@@ -158,32 +164,32 @@ class Session{
 
   // setAttribute(String name, dynamic value)
   void setAttribute(String name, dynamic value) {
-    session.remove(name);
-    session[name] = value;
+    _session.remove(name);
+    _session[name] = value;
   }
 
   // getAttributes()
   Map getAttributes() {
     Map attributes = {};
-    for(String x in session.keys) attributes[x] = session[x];
+    for(String x in _session.keys) attributes[x] = _session[x];
     return attributes;
   }
 
   // getAttributeNames()
   List getAttributeNames() {
     List names = [];
-    for(String x in session.keys) names.add(x);
+    for(String x in _session.keys) names.add(x);
     return names;
   }
 
   // removeAttribute()
   void removeAttribute(String name) {
-    session.remove(name);
+    _session.remove(name);
   }
 
   // invalidate()
   void invalidate() {
-    session.destroy();
+    _session.destroy();
   }
 }
 
@@ -236,7 +242,8 @@ requset.session.isNew : ${request.session.isNew}''');
 
 
 // Create session log message
-StringBuffer createSessionLog(HttpRequest request, Session session) {
+StringBuffer createSessionLog(HttpRequest request) {
+  final session = new Session(request);
   var sb = new StringBuffer("");
   sb.write('''  session.isNew : ${session.isNew}
   session.id : ${session.id}
