@@ -45,7 +45,7 @@ void main() {
       print("Serving $REQUEST_PATH on http://${HOST}:${PORT}.");
     });
 
-  } on Exception catch(err, st){
+  } catch(err, st){
     print(err);
     print(st);
   }
@@ -61,8 +61,8 @@ void requestReceivedHandler(HttpRequest request) {
     if (LOG_REQUESTS) print(createSessionLog(request).toString());
     htmlResponse = createHtmlResponse(request).toString();
 //  if (LOG_REQUESTS) print(createSessionLog(request, session).toString());
-  } on Exception catch (err) {
-    htmlResponse = createErrorPage(err.toString()).toString();
+  } catch (err, st) {
+    htmlResponse = createErrorPage(err.toString() + st.toString()).toString();
   }
   response.headers.add("Content-Type", "text/html; charset=UTF-8");
   response.write(htmlResponse);
@@ -435,7 +435,8 @@ StringBuffer createErrorPage(String errorMessage) {
       </head>
       <body>
         <h1> *** Internal Error ***</h1><br>
-        <pre>Server error occured: ${makeSafe(new StringBuffer(errorMessage)).toString()}</pre><br>
+        <pre>Server rejected this request: '''
+          '''${makeSafe(new StringBuffer(errorMessage)).toString()}</pre><br>
       </body>
     </html>''');
 }
