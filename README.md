@@ -22,7 +22,7 @@ This repository consists of the following source codes.
 ### Try it ###
 
 1. Run the bin/SimpleShoppingCartServer.dart or / and bin/HttpSessionTest.dart as server.
-2. Access these servers from your two or more browsers (Chrome, Firefox, IE..) concurrently as `http://localhost:8080/GooSushi` or  `http://localhost:8080/SessionTest` respectively.
+2. Access these servers from your two or more different browsers (Chrome, Firefox, IE..) concurrently as `http://localhost:8080/GooSushi` or  `http://localhost:8080/SessionTest` respectively.
 
  You can change following parameters:
 

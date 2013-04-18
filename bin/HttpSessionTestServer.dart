@@ -142,7 +142,7 @@ class Session{
     _id = request.session.id;
     _isNew = request.session.isNew;
     request.session.onTimeout = (){
-    print("${new DateTime.now().toString().slice(0, 19)} : "
+    print("${new DateTime.now().toString().substring(0, 19)} : "
         "timeout occured for session ${request.session.id}");
     };
   }
