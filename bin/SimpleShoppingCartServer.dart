@@ -11,11 +11,11 @@
   February 2013, incorporated API cange (Date -> DateTime)
   February 2013, incorporated dart:io changes
   March 2013, revised for Github uploading
+  June 2013, incorporated dart:io changes (dart:uri and HttpRequest.queryParameters removed)
 */
 
 import "dart:io";
 import "dart:utf" as utf;
-import "dart:uri" as uri;
 
 final HOST = "127.0.0.1";
 final int PORT = 8080;
@@ -76,15 +76,15 @@ StringBuffer createHtmlResponse(HttpRequest request) {
   if (session.isNew || request.uri.query == null) {
     return createMenuPage();
   }
-  else if (request.queryParameters.containsKey("menuPage")) {
+  else if (request.uri.queryParameters.containsKey("menuPage")) {
     return createConfirmPage(request);
   }
-  else if (request.queryParameters["confirmPage"].trim() == "confirmed") {
+  else if (request.uri.queryParameters["confirmPage"].trim() == "confirmed") {
     StringBuffer sb = createThankYouPage(session);
     session.invalidate();
     return sb;
   }
-  else if (request.queryParameters["confirmPage"].trim() == "no, re-order") {
+  else if (request.uri.queryParameters["confirmPage"].trim() == "no, re-order") {
     return createMenuPage(cart : session.getAttribute("cart"));
   }
   else {
@@ -102,13 +102,14 @@ class Session{
   HttpSession _session;
   String _id;
   bool _isNew;
+  
   Session(HttpRequest request){
     _session = request.session;
     _id = request.session.id;
     _isNew = request.session.isNew;
     request.session.onTimeout = (){
-    print("${new DateTime.now().toString().substring(0, 19)} : "
-        "timeout occured for session ${request.session.id}");
+      print("${new DateTime.now().toString().substring(0, 19)} : "
+       "timeout occurred for session ${_id}");
     };
   }
 
@@ -118,20 +119,10 @@ class Session{
   bool get isNew => _isNew;
 
   // getAttribute(String name)
-  dynamic getAttribute(String name) {
-    if (_session.containsKey(name)) {
-      return _session[name];
-    }
-    else {
-      return null;
-    }
-  }
+  dynamic getAttribute(String name) => _session[name];
 
   // setAttribute(String name, dynamic value)
-  void setAttribute(String name, dynamic value) {
-    _session.remove(name);
-    _session[name] = value;
-  }
+  setAttribute(String name, dynamic value) { _session[name] = value; }
 
   // getAttributes()
   Map getAttributes() {
@@ -148,14 +139,10 @@ class Session{
   }
 
   // removeAttribute()
-  void removeAttribute(String name) {
-    _session.remove(name);
-  }
+  removeAttribute(String name) { _session.remove(name); }
 
   // invalidate()
-  void invalidate() {
-    _session.destroy();
-  }
+  invalidate() { _session.destroy(); }
 }
 
 
@@ -202,7 +189,6 @@ class ShoppingCart {
           _grandTotal += _items[key].subTotal;
         });
   }
-
 
   // get List of item keys based on itemCodes
   List sortedItemCodes() {
@@ -341,7 +327,7 @@ StringBuffer createConfirmPage(HttpRequest request) {
   final session = new Session(request);
   // create a shopping cart
   var cart = new ShoppingCart();
-  request.queryParameters.forEach((String name, String value) {
+  request.uri.queryParameters.forEach((String name, String value) {
     int quantity;
     if (name.startsWith("pieces_")) {
       quantity = int.parse(value);
@@ -458,7 +444,7 @@ request.uri.path : ${request.uri.path}
 request.uri.query : ${request.uri.query}
 request.uri.queryParameters :
 ''');
-  request.queryParameters.forEach((key, value){
+  request.uri.queryParameters.forEach((key, value){
     sb.write("  ${key} : ${value}\n");
   });
   sb.write('''request.cookies :
@@ -482,7 +468,7 @@ requset.session.isNew : ${request.session.isNew}''');
     if (enctype[0].contains("text")) {
       sb.write("request body string : ${bodyString.replaceAll('+', ' ')}");
     } else if (enctype[0].contains("urlencoded")) {
-      sb.write("request body string (URL decoded): ${uri.decodeUri(bodyString)}");
+      sb.write("request body string (URL decoded): ${Uri.decodeFull(bodyString)}");
     }
   }
   sb.write("\n");
@@ -560,9 +546,9 @@ String formatNumberBy3(num number, {String decpoint: '.', String sep: ','}) {
 void setCookieParameter(HttpResponse response, String name, String value, [String path = null]) {
   if (path == null) {
     response.headers.add("Set-Cookie",
-        "${uri.encodeUriComponent(name)}=${uri.encodeUriComponent(value)}");
+        "${Uri.encodeComponent(name)}=${Uri.encodeComponent(value)}");
   }
   else { response.headers.add("Set-Cookie",
-    "${uri.encodeUriComponent(name)}=${uri.encodeUriComponent(value)};Path=${path}");
+    "${Uri.encodeComponent(name)}=${Uri.encodeComponent(value)};Path=${path}");
   }
 }

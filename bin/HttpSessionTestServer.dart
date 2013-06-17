@@ -9,17 +9,19 @@
   January 2013, incorporated API change
   February 2013, incorporated API cange (Date -> DateTime)
   February 2013, incorporated dart:io changes
+  June 2013, incorporated Brian's refinements
+  June 2013, incorporated dart:io changes (dart:uri and HttpRequest.queryParameters removed)
 */
 
 import "dart:io";
 import "dart:utf" as utf;
-import "dart:uri" as uri;
 
 final HOST = "127.0.0.1";
 final int PORT = 8080;
 final REQUEST_PATH = "/SessionTest";
 final LOG_REQUESTS = false;
-final int MaxInactiveInterval = 20; // set this parameter in seconds. Dart default timeout value is 20 minutes
+final int MaxInactiveInterval = 20; // set this parameter in seconds.
+                                    // Dart default timeout value is 20 minutes
 
 StringBuffer reqLog, sesLog;
 
@@ -30,67 +32,78 @@ void main() {
     server.listen(
         (HttpRequest request) {
           if (request.uri.path == REQUEST_PATH) {
-            requestReceivedHandler(request);
+            handleRequest(request);
           }
         });
     print("Serving $REQUEST_PATH on http://${HOST}:${PORT}.");
   });
 }
 
-void requestReceivedHandler(HttpRequest request) {
+void handleRequest(HttpRequest request) {
   HttpResponse response = request.response;
   String responseBody;
-  Session session;
   try {
     reqLog = createLogMessage(request);
-    if (LOG_REQUESTS) print(reqLog.toString());
-    session = new Session(request); // get session for the request
-    if (request.queryParameters["command"] == "New Session") {
-      session.invalidate(); // note: HttpSession.destroy() is effective from the next request
+    if (LOG_REQUESTS)
+      print(reqLog.toString());
+
+    Session session = new Session(request); // get session for the request
+    sesLog = createSessionLog(session);
+    if (LOG_REQUESTS) {
+      print(sesLog.toString());
     }
-    sesLog = createSessionLog(request);
-    if (LOG_REQUESTS) print(sesLog.toString());
-    responseBody = createHtmlResponse(request);
-  } on Exception catch (err) {
-    responseBody = createErrorPage(err.toString());
+    
+    if (request.uri.queryParameters["command"] == "New Session") {
+      session.invalidate(); // note: HttpSession.destroy() is effective from the next request
+      session = new Session(request); // get the new session
+    }    
+
+    if (request.uri.queryParameters["command"] == "New Session"
+        || request.uri.queryParameters["command"] == null
+        || session.isNew) {
+      responseBody = createInitialPage(session);
+    } else {
+      int iPage = 1;
+      if (!(session.isNew) && !(request.uri.queryParameters["command"] == "Start"))
+        iPage = session.getAttribute("pageNumber") +1;
+      responseBody = createNextPage(session, iPage);
+    }
+  } catch (err, st) {
+    responseBody = createErrorPage(err.toString() + st);
   }
+
   response.headers.add("Content-Type", "text/html; charset=UTF-8");
+
   // cookie setting example (accepts multi-byte characters)
   setCookieParameter(response, "testName", "TestValue_√2=1.41", request.uri.path);
   response.write(responseBody);
   response.close(); // flush
 }
 
-String createHtmlResponse(HttpRequest request) {
-  final session = new Session(request);
-  if (request.queryParameters["command"] == "New Session" || request.queryParameters["command"] == null) {
-    return '''
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <title>HttpSessionTest</title>
-      </head>
-      <body>
-        <h1>Initial Page</h1><br><br>
-        <form method="get" action="/SessionTest">
-          <input type="submit" name="command" value="Start">
-        </form><br>
+String createInitialPage(Session session) {
+  return '''
+   <!DOCTYPE html>
+   <html>
+     <head>
+      <title>HttpSessionTest</title>
+     </head>
+     <body>
+      <h1>Initial Page</h1><br><br>
+      <form method="get" action="/SessionTest">
+      <input type="submit" name="command" value="Start">
+      </form><br>
 Available data from the request :
-        <pre>${makeSafe(reqLog).toString()}</pre><br>
+      <pre>${makeSafe(reqLog).toString()}</pre><br>
 Session data obtained from the request :
-        <pre>${makeSafe(sesLog).toString()}</pre>
+  <pre>${makeSafe(sesLog).toString()}</pre>
 Session data for the response :
-        <pre>${makeSafe(createSessionLog(request)).toString()}</pre>
-      </body>
-    </html>''';
-  }
-  int pageNumber;
-  if (session.isNew || request.queryParameters["command"] == "Start") { pageNumber = 1;
-  } else if (request.queryParameters["command"] == "Next Page") {
-    pageNumber = session.getAttribute("pageNumber") + 1;
-//    pageNumber = Math.parseInt(session.getAttribute("pageNumber").toString()) + 1;
-  }
-  session.setAttribute("pageNumber", pageNumber);
+  <pre>${makeSafe(createSessionLog(session)).toString()}</pre>
+     </body>
+   </html>''';
+}
+
+String createNextPage(Session session, int iPage) {
+  session.setAttribute("pageNumber", iPage);
   return '''
   <!DOCTYPE html>
   <html>
@@ -98,7 +111,7 @@ Session data for the response :
       <title>HttpSessionTest</title>
     </head>
     <body>
-      <h1>Page ${pageNumber}</h1><br>
+      <h1>Page ${iPage}</h1><br>
       Session will be expired after ${MaxInactiveInterval} seconds.<br>
       <form method="get" action="/SessionTest">
         <input type="submit" name="command" value="Next Page">
@@ -109,7 +122,7 @@ Available data from the request :
 Session data obtained from the request :
         <pre>${makeSafe(sesLog).toString()}</pre>
 Session data for the response :
-        <pre>${makeSafe(createSessionLog(request)).toString()}</pre>
+        <pre>${makeSafe(createSessionLog(session)).toString()}</pre>
     </body>
   </html>''';
 }
@@ -124,7 +137,7 @@ String createErrorPage(String errorMessage) {
       </head>
       <body>
         <h1> *** Internal Error ***</h1><br>
-        <pre>Server error occurｒed: ${makeSafe(new StringBuffer(errorMessage)).toString()}</pre><br>
+        <pre>Server error occured: ${makeSafe(new StringBuffer(errorMessage)).toString()}</pre><br>
       </body>
     </html>''').toString();
 }
@@ -137,13 +150,14 @@ class Session{
   HttpSession _session;
   String _id;
   bool _isNew;
+  
   Session(HttpRequest request){
     _session = request.session;
     _id = request.session.id;
     _isNew = request.session.isNew;
     request.session.onTimeout = (){
-    print("${new DateTime.now().toString().substring(0, 19)} : "
-        "timeout occured for session ${request.session.id}");
+      print("${new DateTime.now().toString().substring(0, 19)} : "
+       "timeout occurred for session ${_id}");
     };
   }
 
@@ -153,20 +167,10 @@ class Session{
   bool get isNew => _isNew;
 
   // getAttribute(String name)
-  dynamic getAttribute(String name) {
-    if (_session.containsKey(name)) {
-      return _session[name];
-    }
-    else {
-      return null;
-    }
-  }
+  dynamic getAttribute(String name) => _session[name];
 
   // setAttribute(String name, dynamic value)
-  void setAttribute(String name, dynamic value) {
-    _session.remove(name);
-    _session[name] = value;
-  }
+  setAttribute(String name, dynamic value) { _session[name] = value; }
 
   // getAttributes()
   Map getAttributes() {
@@ -183,14 +187,10 @@ class Session{
   }
 
   // removeAttribute()
-  void removeAttribute(String name) {
-    _session.remove(name);
-  }
+  removeAttribute(String name) { _session.remove(name); }
 
   // invalidate()
-  void invalidate() {
-    _session.destroy();
-  }
+  invalidate() { _session.destroy(); }
 }
 
 // create log message
@@ -209,7 +209,7 @@ request.uri.path : ${request.uri.path}
 request.uri.query : ${request.uri.query}
 request.uri.queryParameters :
 ''');
-  request.queryParameters.forEach((key, value){
+  request.uri.queryParameters.forEach((key, value){
     sb.write("  ${key} : ${value}\n");
   });
   sb.write('''request.cookies :
@@ -233,7 +233,7 @@ requset.session.isNew : ${request.session.isNew}''');
     if (enctype[0].contains("text")) {
       sb.write("request body string : ${bodyString.replaceAll('+', ' ')}");
     } else if (enctype[0].contains("urlencoded")) {
-      sb.write("request body string (URL decoded): ${uri.decodeUri(bodyString)}");
+      sb.write("request body string (URL decoded): ${Uri.decodeFull(bodyString)}");
     }
   }
   sb.write("\n");
@@ -242,8 +242,7 @@ requset.session.isNew : ${request.session.isNew}''');
 
 
 // Create session log message
-StringBuffer createSessionLog(HttpRequest request) {
-  final session = new Session(request);
+StringBuffer createSessionLog(Session session) {
   var sb = new StringBuffer("");
   sb.write('''  session.isNew : ${session.isNew}
   session.id : ${session.id}
@@ -274,9 +273,9 @@ StringBuffer makeSafe(StringBuffer b) {
 void setCookieParameter(HttpResponse response, String name, String value, [String path = null]) {
   if (path == null) {
     response.headers.add("Set-Cookie",
-        "${uri.encodeUriComponent(name)}=${uri.encodeUriComponent(value)}");
+        "${Uri.encodeComponent(name)}=${Uri.encodeComponent(value)}");
   }
   else { response.headers.add("Set-Cookie",
-    "${uri.encodeUriComponent(name)}=${uri.encodeUriComponent(value)};Path=${path}");
+    "${Uri.encodeComponent(name)}=${Uri.encodeComponent(value)};Path=${path}");
   }
 }
