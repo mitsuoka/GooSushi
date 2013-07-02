@@ -34,6 +34,7 @@ void main() {
           if (request.uri.path == REQUEST_PATH) {
             handleRequest(request);
           }
+          else request.response.close();
         });
     print("Serving $REQUEST_PATH on http://${HOST}:${PORT}.");
   });
@@ -52,11 +53,11 @@ void handleRequest(HttpRequest request) {
     if (LOG_REQUESTS) {
       print(sesLog.toString());
     }
-    
+
     if (request.uri.queryParameters["command"] == "New Session") {
       session.invalidate(); // note: HttpSession.destroy() is effective from the next request
       session = new Session(request); // get the new session
-    }    
+    }
 
     if (request.uri.queryParameters["command"] == "New Session"
         || request.uri.queryParameters["command"] == null
@@ -71,7 +72,6 @@ void handleRequest(HttpRequest request) {
   } catch (err, st) {
     responseBody = createErrorPage(err.toString() + st);
   }
-
   response.headers.add("Content-Type", "text/html; charset=UTF-8");
 
   // cookie setting example (accepts multi-byte characters)
@@ -150,7 +150,7 @@ class Session{
   HttpSession _session;
   String _id;
   bool _isNew;
-  
+
   Session(HttpRequest request){
     _session = request.session;
     _id = request.session.id;

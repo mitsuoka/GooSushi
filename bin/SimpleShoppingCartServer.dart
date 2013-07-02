@@ -41,6 +41,7 @@ void main() {
           if (request.uri.path == REQUEST_PATH) {
             requestReceivedHandler(request);
           }
+          else request.response.close();
         });
       print("Serving $REQUEST_PATH on http://${HOST}:${PORT}.");
     });
@@ -102,7 +103,7 @@ class Session{
   HttpSession _session;
   String _id;
   bool _isNew;
-  
+
   Session(HttpRequest request){
     _session = request.session;
     _id = request.session.id;
