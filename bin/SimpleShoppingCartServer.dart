@@ -12,6 +12,7 @@
   February 2013, incorporated dart:io changes
   March 2013, revised for Github uploading
   June 2013, incorporated dart:io changes (dart:uri and HttpRequest.queryParameters removed)
+  July 2003, modified main() to ruggedize
 */
 
 import "dart:io";
@@ -38,17 +39,22 @@ void main() {
       server.sessionTimeout = MaxInactiveInterval; // set session timeout
       server.listen(
         (HttpRequest request) {
+          request.response.done.then((d){
+            if (LOG_REQUESTS) print("${new DateTime.now()} : "
+                "sent response to the client for request ${request.uri}");
+          }).catchError((e) {
+            print("new DateTime.now()} : Error occured while sending response: $e");
+          });
           if (request.uri.path == REQUEST_PATH) {
             requestReceivedHandler(request);
           }
           else request.response.close();
         });
-      print("Serving $REQUEST_PATH on http://${HOST}:${PORT}.");
+      print("new DateTime.now()} : Serving $REQUEST_PATH on http://${HOST}:${PORT}.");
     });
 
   } catch(err, st){
-    print(err);
-    print(st);
+    print("new DateTime.now()} : Server Error : $err \n $st");
   }
 }
 
@@ -57,7 +63,7 @@ void requestReceivedHandler(HttpRequest request) {
   final HttpResponse response = request.response;
   String htmlResponse;
   try {
-    if (LOG_REQUESTS) print(createLogMessage(request).toString());
+    if (LOG_REQUESTS) print("\n" + createLogMessage(request).toString());
     Session session = new Session(request);
     if (LOG_REQUESTS) print(createSessionLog(request).toString());
     htmlResponse = createHtmlResponse(request).toString();
