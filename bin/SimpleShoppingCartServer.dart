@@ -48,7 +48,10 @@ void main() {
           if (request.uri.path == REQUEST_PATH) {
             requestReceivedHandler(request);
           }
-          else request.response.close();
+          else {
+            request.response.statusCode = HttpStatus.BAD_REQUEST;
+            request.response.close();
+          }
         });
       print("new DateTime.now()} : Serving $REQUEST_PATH on http://${HOST}:${PORT}.");
     });
