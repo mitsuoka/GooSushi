@@ -8,69 +8,70 @@
   Ref: www.cresc.co.jp/tech/java/Google_Dart/DartLanguageGuide.pdf (in Japanese)
   November 2012, by Cresc Corp.
   January 2013, incorporated API change
-  February 2013, incorporated API cange (Date -> DateTime)
+  February 2013, incorporated API change (Date -> DateTime)
   February 2013, incorporated dart:io changes
   March 2013, revised for Github uploading
   June 2013, incorporated dart:io changes (dart:uri and HttpRequest.queryParameters removed)
-  July 2003, modified main() to ruggedize
+  July 2013, modified main() to ruggedize
+  July 2013, modified by Brianoh for various small enhancements - decimal currency,
+             Confirm Page, etc.
 */
 
 import "dart:io";
 import "dart:utf" as utf;
 
-final HOST = "127.0.0.1";
-final int PORT = 8080;
-final REQUEST_PATH = "/GooSushi";
-final LOG_REQUESTS = false;
-final int MaxInactiveInterval = 60; // set this parameter in seconds.
-final ShoppingCart cartBase = new ShoppingCart();
-final Map menu = cartBase.items;  // today's menu
-
+final String       HOST              = "127.0.0.1";
+final int          PORT              = 8080;
+final String       REQUEST_PATH      = "/GooSushi";
+final bool         LOG_REQUESTS      = false;
+final int          MAX_INACTIVE_SECS = 60; // set this parameter in seconds.
+final              MENU              = new TodaysMenu().items;  // today's menu
+final ShoppingCart CARTBASE          = new ShoppingCart();
 
 void main() {
   try{
-    print('today\'s menu');
-    cartBase.sortedItemCodes().forEach((itemCode){
-      print('itemCode : ${menu[itemCode].itemCode}, itemName : '
-      '${menu[itemCode].itemName}, perItemCost : ${menu[itemCode].perItemCost}');
+    print ('today\'s menu');
+    CARTBASE.sortedItemCodes().forEach((itemCode){
+      ////print ('itemCode : ${MENU[itemCode].itemCode}, itemName : '
+      print ('itemCode : ${MENU[itemCode].itemCode}, itemName : '
+      '${MENU[itemCode].itemName}, perItemCost : ${formatCcy(MENU[itemCode].perItemCost)}');
     });
 
     HttpServer.bind(HOST, PORT).then((HttpServer server) {
-      server.sessionTimeout = MaxInactiveInterval; // set session timeout
+      server.sessionTimeout = MAX_INACTIVE_SECS; // set session timeout
       server.listen(
         (HttpRequest request) {
           request.response.done.then((d){
-            if (LOG_REQUESTS) print("${new DateTime.now()} : "
+            if (LOG_REQUESTS) print ("${new DateTime.now()} : "
                 "sent response to the client for request ${request.uri}");
           }).catchError((e) {
-            print("new DateTime.now()} : Error occured while sending response: $e");
+            print ("${new DateTime.now()} : Error occured while sending response: $e");
           });
           if (request.uri.path == REQUEST_PATH) {
-            requestReceivedHandler(request);
+            handleRequest(request);
           }
           else {
             request.response.statusCode = HttpStatus.BAD_REQUEST;
             request.response.close();
           }
         });
-      print("new DateTime.now()} : Serving $REQUEST_PATH on http://${HOST}:${PORT}.");
+      print ("${new DateTime.now()} : Serving $REQUEST_PATH on http://${HOST}:${PORT}.");
     });
-
   } catch(err, st){
-    print("new DateTime.now()} : Server Error : $err \n $st");
+    print ("${new DateTime.now()} : Server Error : $err \n $st");
   }
 }
 
-
-void requestReceivedHandler(HttpRequest request) {
+// handle request //
+void handleRequest(HttpRequest request) {
   final HttpResponse response = request.response;
   String htmlResponse;
   try {
-    if (LOG_REQUESTS) print("\n" + createLogMessage(request).toString());
+    if (LOG_REQUESTS)
+      print ("\n" + createLogMessage(request).toString());
     Session session = new Session(request);
-    if (LOG_REQUESTS) print(createSessionLog(request).toString());
-    htmlResponse = createHtmlResponse(request).toString();
-//  if (LOG_REQUESTS) print(createSessionLog(request, session).toString());
+    if (LOG_REQUESTS) print (createSessionLog(session));
+    htmlResponse = createHtmlResponse(request, session).toString();
   } catch (err, st) {
     htmlResponse = createErrorPage(err.toString() + st.toString()).toString();
   }
@@ -79,82 +80,28 @@ void requestReceivedHandler(HttpRequest request) {
   response.close();
 }
 
-
 // Create HTML response to the request.
-StringBuffer createHtmlResponse(HttpRequest request) {
-  final session = new Session(request);
+StringBuffer createHtmlResponse(HttpRequest request, Session session) {
   if (session.isNew || request.uri.query == null) {
     return createMenuPage();
   }
-  else if (request.uri.queryParameters.containsKey("menuPage")) {
-    return createConfirmPage(request);
+  if (request.uri.queryParameters.containsKey("menuPage")) {
+    StringBuffer sb = createConfirmPage(request, session);
+    if (sb.isNotEmpty)
+      return sb;
+    return createMenuPage();
   }
-  else if (request.uri.queryParameters["confirmPage"].trim() == "confirmed") {
+  if (request.uri.queryParameters["confirmPage"].trim() == "confirmed") {
     StringBuffer sb = createThankYouPage(session);
     session.invalidate();
     return sb;
   }
-  else if (request.uri.queryParameters["confirmPage"].trim() == "no, re-order") {
+  if (request.uri.queryParameters["confirmPage"].trim() == "no, re-order") {
     return createMenuPage(cart : session.getAttribute("cart"));
   }
-  else {
-    session.invalidate();
-    return createErrorPage("Invalid request received.");
-  }
+  session.invalidate();
+  return createErrorPage("Invalid request received.");
 }
-
-
-/*
- * Session class is a wrapper of the HttpSession
- * Makes it easier to transport Java server code to Dart server
- */
-class Session{
-  HttpSession _session;
-  String _id;
-  bool _isNew;
-
-  Session(HttpRequest request){
-    _session = request.session;
-    _id = request.session.id;
-    _isNew = request.session.isNew;
-    request.session.onTimeout = (){
-      print("${new DateTime.now().toString().substring(0, 19)} : "
-       "timeout occurred for session ${_id}");
-    };
-  }
-
-  // getters
-  HttpSession get session => _session;
-  String get id => _id;
-  bool get isNew => _isNew;
-
-  // getAttribute(String name)
-  dynamic getAttribute(String name) => _session[name];
-
-  // setAttribute(String name, dynamic value)
-  setAttribute(String name, dynamic value) { _session[name] = value; }
-
-  // getAttributes()
-  Map getAttributes() {
-    Map attributes = {};
-    for(String x in _session.keys) attributes[x] = _session[x];
-    return attributes;
-  }
-
-  // getAttributeNames()
-  List getAttributeNames() {
-    List names = [];
-    for(String x in _session.keys) names.add(x);
-    return names;
-  }
-
-  // removeAttribute()
-  removeAttribute(String name) { _session.remove(name); }
-
-  // invalidate()
-  invalidate() { _session.destroy(); }
-}
-
 
 /*
  * Shopping cart class.
@@ -180,24 +127,24 @@ class ShoppingCart {
   // get cart item with the item code
   ShoppingCartItem getCartItem(int itemCode) => _items[itemCode];
 
+  ClearItems() {_items.clear(); }
+
   // remove an item from the shopping cart and update the amount
   void removeItem(int itemCode) {
     _items.remove(itemCode);
     _grandTotal = 0.0;
-    _items.keys.forEach(
-        (key){
-          _grandTotal = _items[key].subTotal;
-        });
+    _items.keys.forEach((key){
+        _grandTotal = _items[key].subTotal;
+    });
   }
 
   // Add an new item and update the amount
   void addItem(ShoppingCartItem newItem) {
     _grandTotal = 0.0;
     _items[newItem.itemCode] = newItem;
-    _items.keys.forEach(
-        (key){
-          _grandTotal += _items[key].subTotal;
-        });
+    _items.keys.forEach((key){
+      _grandTotal += _items[key].subTotal;
+    });
   }
 
   // get List of item keys based on itemCodes
@@ -206,9 +153,7 @@ class ShoppingCart {
     sortedItemCodes.sort();
     return sortedItemCodes;
   }
-
 }
-
 
   /*
    * Bean like class to set and get information about items in the shopping cart.
@@ -221,9 +166,9 @@ class ShoppingCartItem {
     double _subTotal;
 
   //update items in the shopping cart
-    void update(int itemCode, int qty, double perItemCost) {
+    void update(int itemCode, int iQty, double perItemCost) {
       this.itemCode = itemCode;
-      this.qty =qty;
+      this.iQty = iQty;
       this.perItemCost = perItemCost;
     }
 
@@ -232,14 +177,13 @@ class ShoppingCartItem {
     void set itemCode(int itemCode) {_itemCode = itemCode;}
     double get perItemCost => _perItemCost;
     void set perItemCost(double perItemCost) { _perItemCost = perItemCost;}
-    int get qty => _qty;
-    void set qty(int qty) { _qty = qty;}
+    int get iQty => _qty;
+    void set iQty(int iQty) { _qty = iQty;}
     String get itemName => _itemName;
     void set itemName(String itemName) { _itemName = itemName;}
     double get subTotal => _subTotal;
     void set subTotal(double subTotal) { _subTotal = subTotal; }
 }
-
 
 /*
  * Menu class of the day.
@@ -250,34 +194,32 @@ class TodaysMenu {
 
   Map<int, ShoppingCartItem> get items => _items;
 
-  final todaysMenu = [
-    300, "Tai (Japanese red sea bream)", 360,
-    290, "Maguro (Tuna)", 360,
-    280, "Sake (Salmon)", 360,
-    270, "Hamachi (Yellowtail)", 360,
-    260, "Kanpachi (Great amberjack)", 360,
-    150, "Tobiko (Flying Fish Roe)", 520,
-    160, "Ebi (Shrimp)", 240,
-    170, "Unagi (Eel)", 520,
-    180, "Anago (Conger Eal)", 360,
-    190, "Ika (Squid)", 200
+  final List lMenu = [
+    300, "Tai (Japanese red sea bream)", 3.60,
+    290, "Maguro (Tuna)", 3.60,
+    280, "Sake (Salmon)", 3.60,
+    270, "Hamachi (Yellowtail)", 3.60,
+    260, "Kanpachi (Great amberjack)", 3.60,
+    150, "Tobiko (Flying Fish Roe)", 5.20,
+    160, "Ebi (Shrimp)", 2.40,
+    170, "Unagi (Eel)", 5.20,
+    180, "Anago (Conger Eal)", 3.60,
+    190, "Ika (Squid)", 2.00
   ];
 
   // constructor
   TodaysMenu() {
-    for (var i = 0; i < todaysMenu.length ~/ 3; i++) {
+    for (var i = 0; i < lMenu.length ~/ 3; i++) {
       var cartItem = new ShoppingCartItem();
-      cartItem.itemCode=todaysMenu[i * 3];
-      cartItem.itemName = todaysMenu[i * 3 + 1];
-      cartItem.perItemCost = todaysMenu[i * 3 + 2].toDouble();
-      cartItem.qty = 0;
+      cartItem.itemCode = lMenu[i * 3];
+      cartItem.itemName = lMenu[i * 3 + 1];
+      cartItem.perItemCost = lMenu[i * 3 + 2].toDouble();
+      cartItem.iQty = 0;
       cartItem.subTotal = 0.0;
       _items[cartItem.itemCode] = cartItem;
     }
   }
 }
-
-
 
 // Create menu page HTML text.
 StringBuffer createMenuPage({ShoppingCart cart: null}) {
@@ -296,17 +238,16 @@ StringBuffer createMenuPage({ShoppingCart cart: null}) {
         <tr bgcolor="#90ee90"><th align="center">Item</th><th align="center">Price<br>
         (2 pieces)</th><th align="center"></th></tr>''';
   sb.write(text1);
-  cartBase.sortedItemCodes().forEach((itemCode){
+  CARTBASE.sortedItemCodes().forEach((itemCode){
     var text2 = '''
-        <tr><td align="center">${makeSafe(new StringBuffer(menu[itemCode].itemName)).toString()}</td>
-        <td align="center">${menu[itemCode].perItemCost}</td>
-        <td align="center"><select name="pieces_${menu[itemCode].itemCode}">''';
+        <tr><td align="center">${makeSafe(MENU[itemCode].itemName)}</td>
+        <td align="center">${formatCcy(MENU[itemCode].perItemCost)}</td>
+        <td align="center"><select name="pieces_${MENU[itemCode].itemCode}">''';
     sb.write(text2);
-    if (cart == null || cart.getCartItem(menu[itemCode].itemCode) == null) {
+    if (cart == null || cart.getCartItem(MENU[itemCode].itemCode) == null) {
       text2 = "<option>0<option>1<option>2<option>3<option>4<option>5</select></td></tr>";
-    }
-    else {
-      int pieces = cart.getCartItem(menu[itemCode].itemCode).qty;
+    } else {
+      int pieces = cart.getCartItem(MENU[itemCode].itemCode).iQty;
       text2 = "";
       for (int i = 0; i < 6; i++) {
         if (i == pieces) {
@@ -324,36 +265,40 @@ StringBuffer createMenuPage({ShoppingCart cart: null}) {
       </table><br>
       <input type="submit" name= "menuPage" value="order">
     </form><br>
-    Order will be cancelled in ${MaxInactiveInterval} seconds !
+    Order will be cancelled in ${MAX_INACTIVE_SECS} seconds !
   </body>
 </html>''';
    sb.write(text3);
    return sb;
 }
 
-
 // Create confirm page HTML text.
-StringBuffer createConfirmPage(HttpRequest request) {
-  final session = new Session(request);
+StringBuffer createConfirmPage(HttpRequest request, Session session) {
   // create a shopping cart
-  var cart = new ShoppingCart();
-  request.uri.queryParameters.forEach((String name, String value) {
-    int quantity;
-    if (name.startsWith("pieces_")) {
-      quantity = int.parse(value);
-      if (quantity != 0) {
+  var sb = new StringBuffer("");
+  int iTotItems = 0;
+
+  ShoppingCart cart = new ShoppingCart();
+  cart.ClearItems();
+  request.uri.queryParameters.forEach((String sName, String sValue) {
+    int iQuantity;
+    if (sName.startsWith("pieces_")) {
+      iQuantity = int.parse(sValue);
+      if (iQuantity != 0) {
         var cartItem = new ShoppingCartItem();
-        cartItem.itemCode = int.parse(name.substring(7));
-        cartItem.qty = quantity;
-        cartItem.itemName = menu[cartItem.itemCode].itemName;
-        cartItem.perItemCost = menu[cartItem.itemCode].perItemCost;
-        cartItem.subTotal = cartItem.perItemCost * quantity;
+        cartItem.itemCode = int.parse(sName.substring(7));
+        cartItem.iQty = iQuantity;
+        cartItem.itemName = MENU[cartItem.itemCode].itemName;
+        cartItem.perItemCost = MENU[cartItem.itemCode].perItemCost;
+        cartItem.subTotal = multCcy(cartItem.perItemCost, iQuantity, 2);
         cart.addItem(cartItem);
+        iTotItems++;
       }
     }
   }); // cart completed
+  if (iTotItems < 1)  // nothing selected
+    return sb;
   session.setAttribute("cart", cart); // and bind it to the session
-  var sb = new StringBuffer("");
   var text1 = '''
 <!DOCTYPE html>
 <html>
@@ -369,26 +314,26 @@ StringBuffer createConfirmPage(HttpRequest request) {
           <th align="center">Quantity</th><th align="center">Subtotal</th>
         </tr>''';
   sb.write(text1);
-  var sumQty = 0;
+  int iTotQty = 0;
   cart.sortedItemCodes().forEach((itemCode) {
     ShoppingCartItem cartItem =  cart.items[itemCode];
     var text2 = '''
-        <tr><td align="center">${makeSafe(new StringBuffer(cartItem.itemName))}</td>
-        <td align="right">${cartItem.qty}</td>
-        <td align="right">${formatNumberBy3(cartItem.subTotal)}</td></tr>''';
-    sumQty += cartItem.qty;
+        <tr><td align="center">${makeSafe(cartItem.itemName)}</td>
+        <td align="right">${cartItem.iQty}</td>
+        <td align="right">${formatCcy(cartItem.subTotal)}</td></tr>''';
+    iTotQty += cartItem.iQty;
     sb.write(text2);
   });
   var text3 = '''<tr><td align="center">Grand Total</td>
-        <td align="right">${sumQty}</td>
-        <td align="right" bgcolor="#fafad2">Yen ${formatNumberBy3(cart.amount)}</td></tr>''';
+        <td align="right">${iTotQty}</td>
+        <td align="right" bgcolor="#fafad2">\$${formatCcy(cart.amount)}</td></tr>''';
   sb.write(text3);
   var text4 = '''
       </table><br>
       <input type="submit" name= "confirmPage" value="no, re-order">
       <input type="submit" name= "confirmPage" value=" confirmed ">
     </form><br>
-    Order will be cancelled in ${MaxInactiveInterval} seconds !
+    Order will be cancelled in ${MAX_INACTIVE_SECS} seconds !
   </body>
 </html>''';
    sb.write(text4);
@@ -410,7 +355,7 @@ StringBuffer createThankYouPage(Session session) {
     <h2>Thank you, enjoy your meal!</h2><br><br>
     Date: ${date.substring(0, date.length-7)}<br>
     Order number: ${session.id}<br>
-    Total amount: Yen ${formatNumberBy3(session.getAttribute("cart").amount)}<br><br>
+    Total amount: \$${formatCcy(session.getAttribute("cart").amount)}<br><br>
     <form method="get" action="./GooSushi">
       <input type="submit" name= "thankYouPage" value="come again!">
     </form>
@@ -419,7 +364,6 @@ StringBuffer createThankYouPage(Session session) {
    sb.write(text1);
    return sb;
 }
-
 
 // Create error page HTML text.
 StringBuffer createErrorPage(String errorMessage) {
@@ -432,11 +376,10 @@ StringBuffer createErrorPage(String errorMessage) {
       <body>
         <h1> *** Internal Error ***</h1><br>
         <pre>Server rejected this request: '''
-          '''${makeSafe(new StringBuffer(errorMessage)).toString()}</pre><br>
+          '''${makeSafe(errorMessage)}</pre><br>
       </body>
     </html>''');
 }
-
 
 // create log message
 StringBuffer createLogMessage(HttpRequest request, [String bodyString]) {
@@ -467,12 +410,14 @@ request.headers :
   ''');
   var str = request.headers.toString();
   for (int i = 0; i < str.length - 1; i++){
-    if (str[i] == "\n") { sb.write("\n  ");
-    } else { sb.write(str[i]);
+    if (str[i] == "\n") {
+      sb.write("\n  ");
+    } else {
+      sb.write(str[i]);
     }
   }
   sb.write('''\nrequest.session.id : ${request.session.id}
-requset.session.isNew : ${request.session.isNew}''');
+  request.session.isNew : ${request.session.isNew}''');
   if (request.method == "POST") {
     var enctype = request.headers["content-type"];
     if (enctype[0].contains("text")) {
@@ -485,10 +430,8 @@ requset.session.isNew : ${request.session.isNew}''');
   return sb;
 }
 
-
 // Create session log message
-StringBuffer createSessionLog(HttpRequest request) {
-  final session = new Session(request);
+StringBuffer createSessionLog(Session session) {
   var sb = new StringBuffer("");
   sb.write('''  session.isNew : ${session.isNew}
   session.id : ${session.id}
@@ -498,58 +441,106 @@ StringBuffer createSessionLog(HttpRequest request) {
   return sb;
 }
 
-
 // make safe string buffer data as HTML text
-StringBuffer makeSafe(StringBuffer b) {
-  var s = b.toString();
-  b = new StringBuffer();
-  for (int i = 0; i < s.length; i++){
-    if (s[i] == '&') { b.write('&amp;');
-    } else if (s[i] == '"') { b.write('&quot;');
-    } else if (s[i] == "'") { b.write('&#39;');
-    } else if (s[i] == '<') { b.write('&lt;');
-    } else if (s[i] == '>') { b.write('&gt;');
-    } else { b.write(s[i]);
+StringBuffer makeSafe(String sData) {
+  StringBuffer sbData = new StringBuffer();
+  for (int i = 0; i < sData.length; i++){
+    if (sData[i] == '&') { sbData.write('&amp;');
+    } else if (sData[i] == '"') { sbData.write('&quot;');
+    } else if (sData[i] == "'") { sbData.write('&#39;');
+    } else if (sData[i] == '<') { sbData.write('&lt;');
+    } else if (sData[i] == '>') { sbData.write('&gt;');
+    } else { sbData.write(sData[i]);
     }
   }
-  return b;
+  return sbData;
 }
 
+/*
+ * Session class is a wrapper of the HttpSession
+ * Makes it easier to transport Java server code to Dart server
+ */
+class Session{
+  HttpSession _session;
+  String _id;
+  bool _isNew;
 
-// function to format a number with separators. returns formatted number.
-// original JS Author: Robert Hashemian (http://www.hashemian.com/)
-// modified for Dart, 2012, by Cresc
-// num - the number to be formatted
-// decpoint - the decimal point character. if skipped, "." is used
-// sep - the separator character. if skipped, "," is used
-String formatNumberBy3(num number, {String decpoint: '.', String sep: ','}) {
-  // need a string for operations
-  String numstr = number.toString();
-  // separate the whole number and the fraction if possible
-  var a = numstr.split(decpoint);
-  var x = a[0]; // decimal
-  var y;
-  bool nfr = false; // no fraction flag
-  if (a.length == 1) { nfr = true;
-    } else { y = a[1];
-  } // fraction
-  var z = "";
-  var p = x.length;
-  if (p > 3) {
-    for (int i = p-1; i >= 0; i--) {
-      z = '$z${x[i]}';
-      if ((i > 0) && ((p-i) % 3 == 0) && (x[i-1].codeUnitAt(0) >= '0'.codeUnitAt(0))
-          && (x[i-1].codeUnitAt(0) <= '9'.codeUnitAt(0))) { z = '$z,';
-      }
-    }
-    // reverse z to get back the number
-    x = '';
-    for (int i = z.length - 1; i>=0; i--) x = '$x${z[i]}';
+  Session(HttpRequest request){
+    _session = request.session;
+    _id = request.session.id;
+    _isNew = request.session.isNew;
+    request.session.onTimeout = (){
+      print ("${new DateTime.now().toString().substring(0, 19)} : "
+       "timeout occurred for session ${_id}");
+    };
   }
-    // add the fraction back in, if it was there
-    if (nfr) return x; else return '$x$decpoint$y';
+
+  // getters
+  HttpSession get session => _session;
+  String      get id => _id;
+  bool        get isNew => _isNew;
+
+  // getAttribute(String name)
+  dynamic getAttribute(String name) => _session[name];
+
+  // getAttributes()
+  Map getAttributes() {
+    Map attributes = {};
+    for(String x in _session.keys) attributes[x] = _session[x];
+    return attributes;
+  }
+
+  // getAttributeNames()
+  List getAttributeNames() {
+    List names = [];
+    for(String x in _session.keys)
+      names.add(x);
+    return names;
+  }
+
+  // setAttribute(String name, dynamic value)
+  setAttribute(String name, dynamic value) { _session[name] = value; }
+
+  // removeAttribute()
+  removeAttribute(String name) { _session.remove(name); }
+
+  // invalidate()
+  invalidate() { _session.destroy(); }
 }
 
+/*
+ * Doubles can store currency accurately but cannot handle arithmetic.
+ */
+double multCcy(double dAmt, int iQty, int iDecimals) {
+  int iScale= 1;
+  for (int i = 0; i<iDecimals; i++, iScale*=10);
+  int iAmt = (dAmt * iScale).toInt();
+  return (iAmt * iQty) / iScale;
+}
+
+/*
+ * function to format money with separators.
+ */
+String formatCcy(double dMoney, {int iDecimals: 2, String sDecSep: '.', String sThouSep: ','}) {
+  String sNumber = dMoney.toStringAsFixed(iDecimals);
+  List lsNumber  = sNumber.split('.');
+  if (lsNumber.length < 2)
+    lsNumber.add("0");
+  // format the thousands //
+  StringBuffer sbMoney = new StringBuffer();
+  int iLgth = lsNumber[0].length;
+  for (int iPos = 0; iPos < iLgth; iPos++) {
+    if ((iPos != 0) && (iLgth -(iPos)) % 3 == 0)
+      sbMoney.write(sThouSep);
+    sbMoney.write(lsNumber[0][iPos]);
+  }
+  if (iDecimals == 0 && lsNumber[1] == "0")
+    return lsNumber[0].toString();
+
+  while (lsNumber[1].length < iDecimals)
+    lsNumber[1] += '0';
+  return sbMoney.toString() + sDecSep +lsNumber[1];
+}
 
 // Set cookie parameter to the response header.
 // (Name and value will be URI encoded.)
