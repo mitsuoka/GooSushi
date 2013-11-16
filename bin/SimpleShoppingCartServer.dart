@@ -15,10 +15,10 @@
   July 2013, modified main() to ruggedize
   July 2013, modified by Brianoh for various small enhancements - decimal currency,
              Confirm Page, etc.
+  November 2013, API change (remoteHost -> remoteAddress) incorporated
 */
 
 import "dart:io";
-import "dart:utf" as utf;
 
 final String       HOST              = "127.0.0.1";
 final int          PORT              = 8080;
@@ -386,7 +386,7 @@ StringBuffer createLogMessage(HttpRequest request, [String bodyString]) {
   var sb = new StringBuffer( '''request.headers.host : ${request.headers.host}
 request.headers.port : ${request.headers.port}
 request.connectionInfo.localPort : ${request.connectionInfo.localPort}
-request.connectionInfo.remoteHost : ${request.connectionInfo.remoteHost}
+request.connectionInfo.remoteAddress : ${request.connectionInfo.remoteAddress}
 request.connectionInfo.remotePort : ${request.connectionInfo.remotePort}
 request.method : ${request.method}
 request.persistentConnection : ${request.persistentConnection}
