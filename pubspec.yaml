@@ -1,0 +1,9 @@
+name: GooSushi
+version: 0.2.0
+author:
+description: Dart2 sample of utilizing HttpSession.
+
+environment:
+  sdk: '>=2.0.0-dev <3.0.0'
+
+dependencies:
