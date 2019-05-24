@@ -3,7 +3,7 @@ GooSushi
 
 **GooSushi** is a Dart 2 compliant sample HTTP server application utilizing HttpSession class. Do not use this code without security and stability enhancement for actual applications. This is a Dart code
  sample and an attachment
-to the ["Dart Language Gide"](http://www.cresc.co.jp/tech/java/Google_Dart/DartLanguageGuide.pdf) written in Japanese.
+to the ["Dart 2 Language Gide"](https://www.cresc.co.jp/tech/java/Google_Dart2/introduction/main_page.html) written in Japanese.
 
 This repository consists of the following source codes.
 
@@ -23,9 +23,9 @@ This repository consists of the following source codes.
 
  You can change following parameters:
 
-- final LOG_REQUESTS = false; : Set true to get detailed log.
+- final LOG_REQUESTS = false; // Set true to get detailed log.
 
-- final int MaxInactiveInterval = 60; Set session timeout in seconds.
+- final int MaxInactiveInterval = 60; // Set session timeout in seconds.
 
 
 ### License ###
